@@ -66,6 +66,9 @@ func (r *RuleStore) Effective() (*model.RuleVersion, error) {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
+		if ae, ok := err.(*model.AppError); ok && ae.Code == model.ErrCodeNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return rv, nil
