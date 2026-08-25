@@ -11,8 +11,12 @@ import (
 // GateStore 雷达门持久化。按 (scan_id, elevation_index, azimuth_bin, range_index) 幂等。
 type GateStore struct{ db *sql.DB }
 
-// Upsert 幂等写入一个门：同键已存在则覆盖变量与标签，不存在则插入。
+// Upsert 幂等写入一个门：同键已存在则合并变量，不存在则插入。
 // 返回 inserted 表示本次是否为新增。
+//
+// 断点续传合并语义：同一 (仰角, 方位, 距离) 门再次上传时，
+//   - 任一变量缺失（nil）→ 保留已保存的测量值，不被空值覆盖；保留已有判定标签；
+//   - 三变量齐全 → 视为刷新测量，覆盖旧值并将标签回退为 raw（待重新标记）。
 func (g *GateStore) Upsert(gate *model.Gate) (inserted bool, err error) {
 	tx, err := g.db.Begin()
 	if err != nil {
@@ -20,10 +24,14 @@ func (g *GateStore) Upsert(gate *model.Gate) (inserted bool, err error) {
 	}
 	defer tx.Rollback()
 
-	var existing string
+	var existingID string
+	var exZH, exZDR, exRHOHV sql.NullFloat64
+	var exLabel, exRuleCode string
 	err = tx.QueryRow(
-		`SELECT id FROM gates WHERE scan_id = ? AND elevation_index = ? AND azimuth_bin = ? AND range_index = ?`,
-		gate.ScanID, gate.ElevationIndex, gate.AzimuthBin, gate.RangeIndex).Scan(&existing)
+		`SELECT id, zh, zdr, rhohv, label, rule_code FROM gates
+		 WHERE scan_id = ? AND elevation_index = ? AND azimuth_bin = ? AND range_index = ?`,
+		gate.ScanID, gate.ElevationIndex, gate.AzimuthBin, gate.RangeIndex).
+		Scan(&existingID, &exZH, &exZDR, &exRHOHV, &exLabel, &exRuleCode)
 	switch {
 	case err == sql.ErrNoRows:
 		_, err = tx.Exec(
@@ -40,10 +48,22 @@ func (g *GateStore) Upsert(gate *model.Gate) (inserted bool, err error) {
 	case err != nil:
 		return false, fmt.Errorf("query gate: %w", err)
 	default:
-		// 幂等覆盖：仅允许接收中的体扫覆盖。
+		// 字段级合并：本次缺测的字段保留已保存的测量值，避免空值覆盖。
+		zh, zdr, rhohv := mergeVar(gate.ZH, exZH), mergeVar(gate.ZDR, exZDR), mergeVar(gate.RHOHV, exRHOHV)
+		label := gate.Label
+		ruleCode := gate.RuleCode
+		// 本次携带缺测字段的重传不得降级已有判定结果：保留原标签与规则代码。
+		// 本次携带完整测量（三变量齐全）→ 测量已刷新，标签回退为 raw 以待重新标记。
+		if gate.ZH != nil && gate.ZDR != nil && gate.RHOHV != nil {
+			label = model.GateRaw
+			ruleCode = ""
+		} else {
+			label = model.GateLabel(exLabel)
+			ruleCode = exRuleCode
+		}
 		_, err = tx.Exec(
-			`UPDATE gates SET zh = ?, zdr = ?, rhohv = ?, label = ?, rule_code = ? WHERE id = ?`,
-			gate.ZH, gate.ZDR, gate.RHOHV, string(gate.Label), gate.RuleCode, existing)
+			`UPDATE gates SET range_meters = ?, zh = ?, zdr = ?, rhohv = ?, label = ?, rule_code = ? WHERE id = ?`,
+			gate.RangeMeters, zh, zdr, rhohv, string(label), ruleCode, existingID)
 		if err != nil {
 			return false, fmt.Errorf("update gate: %w", err)
 		}
@@ -52,6 +72,18 @@ func (g *GateStore) Upsert(gate *model.Gate) (inserted bool, err error) {
 		return false, fmt.Errorf("commit gate: %w", err)
 	}
 	return inserted, nil
+}
+
+// mergeVar 合并单个变量：优先使用本次上传的值，缺失时回退已保存的值。
+func mergeVar(incoming *float64, existing sql.NullFloat64) *float64 {
+	if incoming != nil {
+		return incoming
+	}
+	if existing.Valid {
+		v := existing.Float64
+		return &v
+	}
+	return nil
 }
 
 // UpsertBatch 批量幂等写入；返回新增数。

@@ -80,9 +80,9 @@ func (v *Validator) ValidateGates(gates []GateInput) ([]model.Gate, GateValidati
 			RangeMeters:    g.RangeMeters,
 			Label:          model.GateRaw,
 		}
-		// 任一变量缺失 → 缺测
+		// 任一变量缺失 → 缺测：保留该门并标记为 missing，等待断点续传补全。
 		if g.ZH == nil || g.ZDR == nil || g.RHOHV == nil {
-			gate.Label = model.GateRaw
+			gate.Label = model.GateMissing
 			res.Missing++
 			out = append(out, gate)
 			continue
