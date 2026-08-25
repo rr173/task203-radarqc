@@ -32,7 +32,7 @@ func (a *Applier) Apply(cal *model.Calibration, zh, zdr, rhohv *float64) (*float
 		czdr = &v
 	}
 	if rhohv != nil && cal != nil {
-		v := *rhohv + cal.RHOHVBias
+		v := clamp01(*rhohv + cal.RHOHVBias)
 		crhohv = &v
 	}
 	return czh, czdr, crhohv
