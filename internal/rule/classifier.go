@@ -47,7 +47,8 @@ func (c *Classifier) Classify(zh, zdr, rhohv *float64) Decision {
 	}
 	zhv, zdrv, rhohvv := *zh, *zdr, *rhohv
 
-	if zhv >= c.params.ZHMax {
+	// 仅当严格超过上限才判为杂波；恰好等于规则允许的最大值时仍通过该项检查。
+	if zhv > c.params.ZHMax {
 		return Decision{
 			Label:   model.GateClutter,
 			Code:    model.RuleCodeClutterHighZH,
