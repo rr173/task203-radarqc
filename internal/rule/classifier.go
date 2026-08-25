@@ -4,7 +4,7 @@
 //
 //	MISSING                    —— 任一变量缺失
 //	CLUTTER_HIGH_ZH            —— ZH 超过 zh_max（极端反射率，多为地物杂波）
-//	CLUTTER_LOW_RHOHV          —— RHOHV 低于 rhohv_min（非气象回波特征）
+//	CLUTTER_LOW_RHOHV          —— RHOHV 低于 rhohv_min（非气象回波特征，等于下限仍视为有效回波）
 //	CLUTTER_ZERO_ZDR_HIGH_ZH   —— |ZDR| 低于 zdr_abs_max 且 ZH 高于 zh_clutter_min（生物/杂波）
 //	ANOMALOUS_ZDR              —— ZDR 超出 [zdr_min, zdr_max]（物理不可信）
 //	VALID                      —— 全部通过
@@ -54,7 +54,7 @@ func (c *Classifier) Classify(zh, zdr, rhohv *float64) Decision {
 			Message: fmt.Sprintf("ZH=%.2f dBZ 超过上限 %.2f dBZ，判为极端反射率杂波", zhv, c.params.ZHMax),
 		}
 	}
-	if rhohvv <= c.params.RHOHVMin {
+	if rhohvv < c.params.RHOHVMin {
 		return Decision{
 			Label:   model.GateClutter,
 			Code:    model.RuleCodeClutterLowRhoHV,
