@@ -55,7 +55,8 @@ func (m *MarkService) Mark(scanID string) (*MarkResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	if scan.Status == model.ScanSealed || scan.Status == model.ScanMarked {
+	// 仅封存体扫拒绝改写；已标记但未封存的体扫可按当前规则重算（重跑）。
+	if scan.Status == model.ScanSealed {
 		return nil, model.NewForbidden("体扫 %s 已封存，禁止重写标签", scanID)
 	}
 

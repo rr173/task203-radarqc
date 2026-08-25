@@ -75,7 +75,7 @@ func (in *Ingestor) CreateScan(meta ScanMeta) (*model.VolumeScan, error) {
 }
 
 // AppendGates 向体扫追加门数据（幂等）。同一 (仰角, 方位, 距离) 重复上传被跳过（reused 计数）。
-// 仅允许接收中状态；封存/已标记体扫拒绝写入。
+// 仅封存体扫拒绝写入；接收中/待标记/已标记但未封存均允许补充（断点续传）。
 func (in *Ingestor) AppendGates(scanID string, gates []GateInput) (*IngestResult, error) {
 	scan, err := in.store.Scans.Get(scanID)
 	if err != nil {
@@ -83,13 +83,6 @@ func (in *Ingestor) AppendGates(scanID string, gates []GateInput) (*IngestResult
 	}
 	if scan.Status == model.ScanSealed {
 		return nil, model.NewForbidden("体扫 %s 已封存，禁止追加门数据", scanID)
-	}
-	if scan.Status == model.ScanMarked {
-		return nil, model.NewForbidden("体扫 %s 已标记，禁止追加门数据", scanID)
-	}
-	if scan.Status != model.ScanReceiving {
-		// 待标记状态下允许继续补充（断点续传语义），不拒绝
-		_ = scan.Status
 	}
 
 	v := NewValidator(scan.ElevationCount, scan.AzimuthBins, scan.RangeGates)

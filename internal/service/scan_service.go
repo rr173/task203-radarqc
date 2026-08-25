@@ -60,6 +60,6 @@ func (s *ScanService) Seal(scanID string) (*model.VolumeScan, error) {
 	if err := s.store.Scans.UpdateStatus(scanID, model.ScanSealed, scan.RuleVersionID); err != nil {
 		return nil, err
 	}
-	scan.Status = model.ScanMarked
+	scan.Status = model.ScanSealed
 	return scan, nil
 }

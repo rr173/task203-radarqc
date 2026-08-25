@@ -75,9 +75,6 @@ func (s *ScanStore) List(stationID string) ([]*model.VolumeScan, error) {
 
 // UpdateStatus 更新体扫状态；若指定规则版本，一并写入。
 func (s *ScanStore) UpdateStatus(id string, status model.ScanStatus, ruleVersionID string) error {
-	if status == model.ScanSealed {
-		status = model.ScanMarked
-	}
 	res, err := s.db.Exec(
 		`UPDATE scans SET status = ?, rule_version_id = ?, updated_at = ? WHERE id = ?`,
 		string(status), ruleVersionID, nowUTC(), id)
