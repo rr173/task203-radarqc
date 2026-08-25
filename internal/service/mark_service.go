@@ -26,6 +26,10 @@ type MarkService struct {
 	summaries *summary.Aggregator
 	evidence  *evidence.Recorder
 	locks     *map[string]*sync.Mutex // scanID -> *sync.Mutex
+	// lockMu 串行化对 locks 的“查或建”访问，杜绝并发 map 写入与多锁分叉。
+	// 仅在 lockFor 内短暂持有，绝不在持锁期间等待 scanID 的 mu，
+	// 否则会把不同体扫也串行化。
+	lockMu sync.Mutex
 }
 
 // MarkResult 标记任务结果。
@@ -39,7 +43,16 @@ type MarkResult struct {
 }
 
 // lockFor 获取体扫锁。
+//
+// 并发安全：对 locks map 的“查或建”在 m.lockMu 保护下原子完成，
+// 既杜绝 fatal: concurrent map writes，也保证同一体扫的所有调用者
+// 拿到同一个 *sync.Mutex（否则多锁分叉会让串行化失效、产生部分结果）。
+//
+// 注意：m.lockMu 绝不在持有 scanID 的 mu 期间保持——否则会把不同体扫
+// 的标记也串行化。因此本函数返回后（释放 lockMu）才由调用方加锁。
 func (m *MarkService) lockFor(scanID string) *sync.Mutex {
+	m.lockMu.Lock()
+	defer m.lockMu.Unlock()
 	if mu, ok := (*m.locks)[scanID]; ok {
 		return mu
 	}
