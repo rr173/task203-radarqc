@@ -1,7 +1,6 @@
 package rule
 
 import (
-	"fmt"
 	"time"
 
 	"task203-radarqc/internal/model"
@@ -20,6 +19,10 @@ func NewRuleset(s *store.Store) *Ruleset {
 }
 
 // CreateDraft 创建规则草稿。同一 name 下版本号自动递增。
+//
+// 并发安全：版本号分配与插入在存储层同一事务内原子完成，并发创建同名
+// 草稿时各请求取得唯一且连续的版本号，不会因读到相同下一版本而撞
+// UNIQUE(name, version)。
 func (r *Ruleset) CreateDraft(name string, params model.RuleParams) (*model.RuleVersion, error) {
 	if name == "" {
 		return nil, model.NewInvalidInput("规则名称不能为空")
@@ -27,24 +30,15 @@ func (r *Ruleset) CreateDraft(name string, params model.RuleParams) (*model.Rule
 	if err := params.Validate(); err != nil {
 		return nil, err
 	}
-	version, err := r.store.Rules.NextVersion(name)
-	if err != nil {
-		return nil, err
-	}
 	now := r.now().UTC()
 	rv := &model.RuleVersion{
-		ID:        fmt.Sprintf("rule-%d-%d", now.UnixNano(), version),
 		Name:      name,
-		Version:   version,
 		Params:    params,
 		Status:    model.RuleDraft,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
-	if err := r.store.Rules.Create(rv); err != nil {
-		return nil, err
-	}
-	return rv, nil
+	return r.store.Rules.CreateDraft(rv)
 }
 
 // Publish 发布草稿为生效；其他生效版本自动转废止。

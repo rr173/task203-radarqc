@@ -27,6 +27,46 @@ func (r *RuleStore) Create(rv *model.RuleVersion) error {
 	return nil
 }
 
+// CreateDraft 原子地为给定 name 分配下一个版本号并插入草稿。
+//
+// 版本分配与插入在同一事务内完成：SQLite 单写者会在 SELECT MAX(version) 与
+// INSERT 之间串行化，杜绝并发请求读到相同“下一版本”而撞 UNIQUE(name, version)。
+// 调用方传入的 rv.Version / rv.ID 会被覆盖为事务内分配的版本号与据此生成的 ID。
+func (r *RuleStore) CreateDraft(rv *model.RuleVersion) (*model.RuleVersion, error) {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("begin rule draft tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	// 事务内读取当前最大版本号。SQLite 单写者保证此读与后续插入之间无他人介入。
+	var version int
+	if err := tx.QueryRow(
+		`SELECT COALESCE(MAX(version), 0) + 1 FROM rule_versions WHERE name = ?`, rv.Name).Scan(&version); err != nil {
+		return nil, fmt.Errorf("next rule version in tx: %w", err)
+	}
+
+	rv.Version = version
+	rv.ID = fmt.Sprintf("rule-%d-%d", rv.CreatedAt.UnixNano(), version)
+
+	created := rv.CreatedAt.UTC().Format(time.RFC3339Nano)
+	if _, err := tx.Exec(
+		`INSERT INTO rule_versions (id, name, version, zh_max, zdr_min, zdr_max, rhohv_min,
+			zdr_abs_max, zh_clutter_min, status, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		rv.ID, rv.Name, rv.Version, rv.Params.ZHMax, rv.Params.ZDRMin, rv.Params.ZDRMax,
+		rv.Params.RHOHVMin, rv.Params.ZDRAbsMax, rv.Params.ZHClutterMin,
+		string(rv.Status), created, created,
+	); err != nil {
+		return nil, fmt.Errorf("insert rule version in tx: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit rule draft tx: %w", err)
+	}
+	return rv, nil
+}
+
 // Get 按 ID 查询。
 func (r *RuleStore) Get(id string) (*model.RuleVersion, error) {
 	row := r.db.QueryRow(
