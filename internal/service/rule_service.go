@@ -50,7 +50,7 @@ func (s *RuleService) CompareRules(fromID, toID string) (*rule.VersionDiff, erro
 	if err != nil {
 		return nil, err
 	}
-	return rule.CompareVersions(to, from), nil
+	return rule.CompareVersions(from, to), nil
 }
 
 // TraceFlip 分析两版规则对同一体扫门的标签翻转。

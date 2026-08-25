@@ -29,13 +29,13 @@ type ThresholdChange struct {
 }
 
 // CompareVersions 对比两个规则版本，输出阈值差异与收紧/放宽方向。
-// 方向语义：
+// 方向语义（from → to；收紧=更多门判为杂波/异常，放宽=更多门判为有效）：
 //   - ZHMax 变大 → 放宽；变小 → 收紧
 //   - RHOHVMin 变大 → 收紧；变小 → 放宽
 //   - ZDRMin 变小 → 放宽；变大 → 收紧
 //   - ZDRMax 变大 → 放宽；变小 → 收紧
-//   - ZDRAbsMax 变大 → 放宽；变小 → 收紧
-//   - ZHClutterMin 变大 → 收紧；变小 → 放宽
+//   - ZDRAbsMax 变大 → 收紧；变小 → 放宽
+//   - ZHClutterMin 变大 → 放宽；变小 → 收紧
 func CompareVersions(from, to *model.RuleVersion) *VersionDiff {
 	diff := &VersionDiff{From: from, To: to}
 	if from == nil || to == nil {
@@ -61,7 +61,7 @@ func CompareVersions(from, to *model.RuleVersion) *VersionDiff {
 		add("zh_max", fmt.Sprintf("%.2f", f.ZHMax), fmt.Sprintf("%.2f", t.ZHMax), t.ZHMax > f.ZHMax)
 	}
 	if f.RHOHVMin != t.RHOHVMin {
-		add("rhohv_min", fmt.Sprintf("%.3f", f.RHOHVMin), fmt.Sprintf("%.3f", t.RHOHVMin), t.RHOHVMin > f.RHOHVMin)
+		add("rhohv_min", fmt.Sprintf("%.3f", f.RHOHVMin), fmt.Sprintf("%.3f", t.RHOHVMin), t.RHOHVMin < f.RHOHVMin)
 	}
 	if f.ZDRMin != t.ZDRMin {
 		add("zdr_min", fmt.Sprintf("%.2f", f.ZDRMin), fmt.Sprintf("%.2f", t.ZDRMin), t.ZDRMin < f.ZDRMin)
@@ -70,10 +70,10 @@ func CompareVersions(from, to *model.RuleVersion) *VersionDiff {
 		add("zdr_max", fmt.Sprintf("%.2f", f.ZDRMax), fmt.Sprintf("%.2f", t.ZDRMax), t.ZDRMax > f.ZDRMax)
 	}
 	if f.ZDRAbsMax != t.ZDRAbsMax {
-		add("zdr_abs_max", fmt.Sprintf("%.2f", f.ZDRAbsMax), fmt.Sprintf("%.2f", t.ZDRAbsMax), t.ZDRAbsMax > f.ZDRAbsMax)
+		add("zdr_abs_max", fmt.Sprintf("%.2f", f.ZDRAbsMax), fmt.Sprintf("%.2f", t.ZDRAbsMax), t.ZDRAbsMax < f.ZDRAbsMax)
 	}
 	if f.ZHClutterMin != t.ZHClutterMin {
-		add("zh_clutter_min", fmt.Sprintf("%.2f", f.ZHClutterMin), fmt.Sprintf("%.2f", t.ZHClutterMin), t.ZHClutterMin < f.ZHClutterMin)
+		add("zh_clutter_min", fmt.Sprintf("%.2f", f.ZHClutterMin), fmt.Sprintf("%.2f", t.ZHClutterMin), t.ZHClutterMin > f.ZHClutterMin)
 	}
 
 	switch {

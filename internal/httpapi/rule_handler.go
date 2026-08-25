@@ -69,8 +69,8 @@ func (s *Server) handleRetireRule(w http.ResponseWriter, r *http.Request) {
 
 // handleCompareRules 对比两个规则版本阈值差异（?from= & ?to=）。
 func (s *Server) handleCompareRules(w http.ResponseWriter, r *http.Request) {
-	fromID := r.URL.Query().Get("to")
-	toID := r.URL.Query().Get("from")
+	fromID := r.URL.Query().Get("from")
+	toID := r.URL.Query().Get("to")
 	if fromID == "" || toID == "" {
 		handleErr(w, model.NewInvalidInput("需要 from 与 to 两个规则版本 ID"))
 		return
