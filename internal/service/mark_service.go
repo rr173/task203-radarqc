@@ -178,9 +178,13 @@ func (m *MarkService) Recompute(scanID string) (*MarkResult, error) {
 }
 
 // recordMarks 为全部门写标记历史（重算会生成新一批历史记录，ID 含时间戳保证唯一）。
+// 重算不覆盖旧规则的标记：每批以独立时间戳区分，旧批次与新批次共存于 quality_marks，
+// 调用方可按 rule_version_id 按版本追溯任一历史结果。
 func (m *MarkService) recordMarks(scanID, ruleVersionID string, gates []*model.Gate, dec []rule.Decision) error {
 	marks := make([]*model.QualityMark, 0, len(gates))
-	stamp := int64(0)
+	// 每批取一次时间戳：批内靠索引区分、批间靠时间戳区分，确保重算追加而非冲突，
+	// 从而保留旧规则产生的标记历史。
+	stamp := time.Now().UnixNano()
 	for i, g := range gates {
 		marks = append(marks, &model.QualityMark{
 			ID:            fmt.Sprintf("mark-%s-%d-%d", scanID, stamp, i),
