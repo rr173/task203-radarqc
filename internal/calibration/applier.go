@@ -28,7 +28,7 @@ func (a *Applier) Apply(cal *model.Calibration, zh, zdr, rhohv *float64) (*float
 		czh = &v
 	}
 	if zdr != nil && cal != nil {
-		v := *zdr + cal.ZDRBias
+		v := *zdr - cal.ZDRBias
 		czdr = &v
 	}
 	if rhohv != nil && cal != nil {
